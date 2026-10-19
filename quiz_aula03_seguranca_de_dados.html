@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Quiz Plantão TI 3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: a bedside vital-signs monitor. HUD band on top (like the parameter readouts), ECG trace as the question timer, question card in the "screen" below. Single dark theme by design. */
+:root{
+  --bg:#0c1824;          /* monitor housing */
+  --panel:#13263a;       /* screen */
+  --panel-2:#1a3149;
+  --line:#2a4561;
+  --fg:#e8f1f7;
+  --muted:#93aac0;
+  --ecg:#3fd6c8;         /* ECG trace / primary */
+  --coin:#ffbe4d;        /* coins */
+  --ok:#5ee08f;
+  --bad:#ff6170;
+  --font-display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --font-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+html,body{min-height:100%}
+button,input{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ecg);outline-offset:2px}
+.btn{font-family:var(--font-display);font-weight:700;font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase;
+  border:0;border-radius:10px;padding:14px 22px;background:var(--ecg);color:#062126;transition:transform .12s,filter .12s}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:transparent;color:var(--fg);border:2px solid var(--line)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.label{font-family:var(--font-display);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.screen{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px}
+
+/* ---- top bar ---- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:2px}
+.brand h1{font-size:1.35rem}
+.brand .label{color:var(--ecg)}
+.tools{display:flex;gap:8px}
+.icon-btn{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:8px 12px;font-family:var(--font-display);font-size:.85rem;letter-spacing:.05em}
+
+/* ---- start ---- */
+.start{display:grid;grid-template-columns:1.2fr 1fr;gap:24px}
+.start > *{min-width:0}
+.start h2{font-size:clamp(1.8rem,5vw,2.6rem);line-height:1.1}
+.start h2 span{color:var(--ecg)}
+.start p{color:var(--muted);margin:0;max-width:60ch}
+.start .col{display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field input{background:var(--bg);border:2px solid var(--line);color:var(--fg);border-radius:10px;padding:12px 14px;font:inherit;font-size:1.05rem}
+.rules{background:var(--panel-2);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.rules ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:var(--fg)}
+.rules b{color:var(--coin)}
+.topics{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:.8rem;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.best{font-size:.9rem;color:var(--muted)}
+
+/* ---- HUD ---- */
+.hud{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.hud .cell{background:var(--panel);padding:10px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.hud .val{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.hud .val small{font-size:.9rem;color:var(--muted);font-weight:600}
+.v-ecg{color:var(--ecg)}.v-coin{color:var(--coin)}.v-ok{color:var(--ok)}
+.combo{color:var(--coin)}
+
+.monitor{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;height:86px}
+.monitor canvas{display:block;width:100%;height:100%}
+.monitor .time{position:absolute;right:14px;top:8px;text-align:right}
+.monitor .time .val{font-family:var(--font-display);font-weight:700;font-size:1.9rem;color:var(--ecg);font-variant-numeric:tabular-nums;line-height:1}
+.monitor.low .time .val{color:var(--bad)}
+.monitor .bpm{position:absolute;left:14px;top:8px}
+
+.progress{height:6px;background:var(--panel-2);border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--ecg);transition:width .4s}
+
+/* ---- question ---- */
+.q-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.topic-tag{font-family:var(--font-display);font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ecg);border:1px solid var(--ecg);border-radius:6px;padding:2px 8px}
+.q-text{font-size:clamp(1.15rem,3vw,1.4rem);font-weight:700;margin:14px 0 18px;line-height:1.35}
+.opts{display:grid;gap:10px}
+.opt{display:flex;align-items:center;gap:14px;text-align:left;background:var(--panel-2);color:var(--fg);border:2px solid var(--line);border-radius:12px;padding:14px 16px;font-size:1rem;transition:border-color .15s,background .15s,transform .1s}
+.opt:hover:not(:disabled){border-color:var(--ecg)}
+.opt .key{flex:none;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;background:var(--bg);color:var(--ecg)}
+.opt span:last-child{min-width:0}
+.opt:disabled{cursor:default}
+.opt.correct{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 16%,var(--panel-2))}
+.opt.correct .key{background:var(--ok);color:#06210f}
+.opt.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 16%,var(--panel-2))}
+.opt.wrong .key{background:var(--bad);color:#2a0409}
+.opt.cut{opacity:.25}
+.q-actions #nextBtn,.q-actions #checkBtn{margin-left:auto}
+.q-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap}
+
+.feedback{margin-top:16px;border-radius:12px;padding:14px 16px;border-left:5px solid var(--ok);background:var(--panel-2);display:flex;flex-direction:column;gap:4px}
+.feedback.bad{border-left-color:var(--bad)}
+.feedback h3{font-size:1.1rem}
+.feedback.ok h3{color:var(--ok)}.feedback.bad h3{color:var(--bad)}
+.feedback p{margin:0;color:var(--fg)}
+.feedback .gain{color:var(--coin);font-family:var(--font-display);font-weight:600}
+
+/* ---- toast ---- */
+.toast{position:fixed;left:50%;top:calc(18px + env(safe-area-inset-top,0px));transform:translate(-50%,calc(-100% - 60px));visibility:hidden;background:var(--coin);color:#2b1a00;font-family:var(--font-display);font-weight:700;letter-spacing:.06em;padding:10px 18px;border-radius:10px;transition:transform .35s,visibility .35s;z-index:20;text-align:center;max-width:calc(100% - 32px)}
+.toast.show{transform:translate(-50%,0);visibility:visible}
+
+/* ---- pause ---- */
+.overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 85%,transparent);display:grid;place-items:center;z-index:30;padding:16px}
+.overlay .screen{text-align:center;display:flex;flex-direction:column;gap:14px;max-width:380px}
+
+/* ---- results ---- */
+.result-top{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center}
+.result-top > *{min-width:0}
+.medal{width:150px;height:150px;border-radius:50%;display:grid;place-items:center;text-align:center;border:6px solid var(--medal,var(--ecg));background:var(--panel-2)}
+.medal .big{font-family:var(--font-display);font-weight:700;font-size:3.2rem;line-height:1;color:var(--medal,var(--ecg));font-variant-numeric:tabular-nums}
+.medal .of{color:var(--muted);font-size:.85rem}
+.result-top h2{font-size:clamp(1.5rem,4vw,2.1rem)}
+.result-top p{margin:6px 0 0;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:20px}
+.stat{background:var(--panel-2);border-radius:12px;padding:12px 14px}
+.stat .val{font-family:var(--font-display);font-weight:700;font-size:1.4rem;font-variant-numeric:tabular-nums}
+.review{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.review details{background:var(--panel-2);border-radius:10px;padding:10px 14px;border-left:4px solid var(--ok)}
+.review details.x{border-left-color:var(--bad)}
+.review summary{cursor:pointer;display:flex;gap:10px;align-items:baseline}
+.review summary b{font-family:var(--font-display);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.review .ans{margin:8px 0 0;font-size:.95rem;color:var(--muted)}
+.review .ans strong{color:var(--fg)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+
+.opt{min-height:56px}
+/* Tablet */
+@media (max-width:820px){
+  .start{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+/* Celular */
+@media (max-width:560px){
+  body{padding-block:12px 28px}
+  .brand h1{font-size:1.1rem}
+  .tools{width:100%}
+  .tools .icon-btn{flex:1;padding:10px}
+  .hud{grid-template-columns:repeat(2,1fr)}
+  .hud .val{font-size:1.35rem}
+  .monitor{height:72px}
+  .monitor .time .val{font-size:1.6rem}
+  .result-top{grid-template-columns:1fr;justify-items:center;text-align:center}
+  .medal{width:130px;height:130px}
+  .screen{padding:16px}
+  .q-actions .btn{flex:1}
+  .opt{padding:12px;gap:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@keyframes pop{0%{transform:scale(.96)}60%{transform:scale(1.02)}100%{transform:scale(1)}}
+.pop{animation:pop .3s ease-out}
+/* ---- drag and drop ---- */
+.dd-hint{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.9rem;margin:-6px 0 14px}
+.dd-hint b{color:var(--ecg)}
+.pool{display:flex;flex-wrap:wrap;gap:8px;min-height:56px;padding:12px;border:2px dashed var(--line);border-radius:12px;background:var(--bg)}
+.pool.over{border-color:var(--ecg)}
+.pool:empty::after{content:"Todos os itens foram posicionados. Confira e clique em Verificar.";color:var(--muted);font-size:.9rem;align-self:center}
+.chip-dd{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;background:var(--panel-2);color:var(--fg);border:2px solid var(--ecg);border-radius:10px;padding:9px 14px;font-weight:700;font-size:.98rem;line-height:1.25;transition:transform .1s,box-shadow .1s}
+.chip-dd:hover{box-shadow:0 0 0 3px color-mix(in srgb,var(--ecg) 30%,transparent)}
+.chip-dd.sel{background:var(--ecg);color:#062126}
+.chip-dd.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 22%,var(--panel-2))}
+.chip-dd.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 22%,var(--panel-2))}
+.chip-dd.locked{cursor:default}
+.ghost{position:fixed;z-index:50;pointer-events:none;transform:translate(-50%,-50%) rotate(-2deg);box-shadow:0 10px 24px rgba(0,0,0,.45)}
+.zones{display:grid;gap:10px;margin-top:14px}
+.zones.cls{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.zone{border:2px solid var(--line);border-radius:12px;background:var(--panel-2);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0;transition:border-color .15s,background .15s}
+.zone.over,.zone.target{border-color:var(--ecg);background:color-mix(in srgb,var(--ecg) 10%,var(--panel-2))}
+.zone h4{margin:0;font-family:var(--font-display);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ecg)}
+.zone .slot{display:flex;flex-wrap:wrap;gap:8px;min-height:46px;align-content:flex-start}
+.zones.cls .slot{min-height:110px}
+.zone.row{display:grid;grid-template-columns:1fr minmax(150px,40%);align-items:center;gap:12px}
+.zone.row .desc{font-size:.98rem;min-width:0}
+.zone.row .num{font-family:var(--font-display);font-weight:700;color:var(--ecg);margin-right:6px}
+.zone.row .slot{border:2px dashed var(--line);border-radius:10px;padding:6px;min-height:50px;align-items:center}
+.correct-note{display:block;font-size:.85rem;color:var(--ok);font-weight:700;margin-top:2px}
+.tag-dd{border-color:var(--coin);color:var(--coin)}
+@media (max-width:560px){
+  .zone.row{grid-template-columns:1fr}
+  .zones.cls{grid-template-columns:1fr 1fr}
+  .zones.cls .slot{min-height:70px}
+  .chip-dd{font-size:.92rem;padding:8px 11px}
+}
+/* ---- caça-palavras ---- */
+.ws-wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start}
+.ws-grid{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:3px;touch-action:none;user-select:none;-webkit-user-select:none;background:var(--bg);padding:8px;border-radius:12px;border:2px solid var(--line);max-width:480px;width:100%}
+.ws-cell{aspect-ratio:1;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:clamp(.78rem,2.6vw,1.12rem);border-radius:6px;background:var(--panel-2);color:var(--fg);cursor:pointer;transition:background .1s,transform .1s}
+.ws-cell.sel{background:var(--ecg);color:#062126;transform:scale(1.06)}
+.ws-cell.start{outline:2px solid var(--coin)}
+.ws-cell.found{background:color-mix(in srgb,var(--hc) 75%,var(--panel-2));color:#08161f}
+.ws-cell.reveal{outline:2px dashed var(--bad);outline-offset:-2px;color:var(--bad)}
+.ws-cell.miss{background:color-mix(in srgb,var(--bad) 45%,var(--panel-2))}
+.ws-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;counter-reset:c}
+.ws-clue{background:var(--panel-2);border:2px solid var(--line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:2px;counter-increment:c}
+.ws-clue .ws-c{font-size:.92rem;color:var(--muted)}
+.ws-clue .ws-c::before{content:counter(c) ". ";color:var(--ecg);font-weight:700}
+.ws-clue .ws-blank{font-family:var(--font-display);font-weight:700;letter-spacing:.12em;color:var(--fg)}
+.ws-clue.done{border-color:var(--hc)}
+.ws-clue.done .ws-blank{color:var(--hc)}
+.ws-clue.missed{border-color:var(--bad)}
+.ws-clue.missed .ws-blank{color:var(--bad)}
+.ws-count{margin:10px 0 0;font-family:var(--font-display);font-weight:600;color:var(--coin)}
+@media (max-width:700px){ .ws-wrap{grid-template-columns:1fr} .ws-grid{max-width:none;gap:2px;padding:5px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="label">Técnico em Enfermagem · Aula 03</span>
+      <h1>Plantão TI 3: Segurança de Dados</h1>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="soundBtn" type="button" aria-pressed="true">♪ Som: ligado</button>
+      <button class="icon-btn" id="pauseBtn" type="button" hidden>❚❚ Pausar</button>
+    </div>
+  </header>
+
+  <!-- START -->
+  <section id="startScreen" class="screen start">
+    <div class="col">
+      <h2>Proteja os dados do plantão. <span>20 casos</span> com arrastar e caça-palavras.</h2>
+      <p>Revise a aula de Segurança de Dados: pilares da segurança, vírus e antivírus, boas práticas e Zero Trust. Cada questão vale 5 pontos e a nota vai até 100. Meta: chegar à classe OURO.</p>
+      <div class="topics">
+        <span class="chip">Pilares da segurança</span><span class="chip">LGPD e sigilo</span><span class="chip">Vírus e pragas</span><span class="chip">Antivírus e firewall</span><span class="chip">Senhas fortes</span><span class="chip">Zero Trust</span>
+      </div>
+      <form id="startForm" class="field">
+        <label class="label" for="playerName">Seu nome</label>
+        <input id="playerName" type="text" maxlength="40" placeholder="Digite seu nome completo" autocomplete="name" required>
+        <button class="btn" type="submit" style="margin-top:8px">Iniciar plantão</button>
+      </form>
+      <p class="best" id="bestScore"></p>
+    </div>
+    <aside class="rules">
+      <span class="label">Regras do jogo</span>
+      <ul>
+        <li><b>5 pontos</b> por questão. 20 questões = <b>100 pontos</b>.</li>
+        <li><b>10 de múltipla escolha</b>, <b>5 de arrastar e soltar</b> e <b>5 caça-palavras</b>.</li>
+        <li>Arrastar e caça-palavras: pontos proporcionais aos acertos.</li>
+        <li>Tempo: <b>45 s</b> (múltipla escolha), <b>90 s</b> (arrastar) e <b>120 s</b> (caça-palavras).</li>
+        <li>Ouro: 90 pontos ou mais. Prata: 70. Bronze: 50.</li>
+        <li>Ganhe <b>moedas</b>: 100 por acerto completo mais bônus de rapidez.</li>
+        <li>Acertos seguidos aumentam o <b>multiplicador</b> de moedas até 2x.</li>
+        <li>A cada <b>5 acertos seguidos</b>: +250 moedas de bônus.</li>
+        <li>Uma ajuda <b>50/50</b> para as questões de múltipla escolha.</li>
+        <li>As moedas são só para o ranking da turma. A nota vem dos acertos.</li>
+      </ul>
+    </aside>
+  </section>
+
+  <!-- GAME -->
+  <section id="gameScreen" hidden>
+    <div class="wrap">
+      <div class="hud">
+        <div class="cell"><span class="label">Questão</span><span class="val v-ecg" id="hudQ">1<small>/20</small></span></div>
+        <div class="cell"><span class="label">Nota</span><span class="val v-ok" id="hudScore">0<small>/100</small></span></div>
+        <div class="cell"><span class="label">Moedas</span><span class="val v-coin" id="hudCoins">0</span></div>
+        <div class="cell"><span class="label">Sequência</span><span class="val" id="hudStreak">0 <small class="combo">1.0x</small></span></div>
+      </div>
+      <div class="monitor" id="monitor">
+        <canvas id="ecg" aria-hidden="true"></canvas>
+        <div class="bpm"><span class="label">Tempo da questão</span></div>
+        <div class="time"><div class="val" id="timeVal">45</div><span class="label">segundos</span></div>
+      </div>
+      <div class="progress" aria-hidden="true"><i id="progBar"></i></div>
+      <article class="screen" id="qCard">
+        <div class="q-head">
+          <span class="topic-tag" id="qTopic">Tema</span>
+          <span class="label" id="qWorth">Vale 5 pontos</span>
+        </div>
+        <p class="q-text" id="qText"></p>
+        <div class="opts" id="opts"></div>
+        <div id="feedback"></div>
+        <div class="q-actions">
+          <button class="btn ghost" type="button" id="fiftyBtn">50/50</button>
+          <button class="btn" type="button" id="checkBtn" hidden disabled>Verificar</button>
+          <button class="btn" type="button" id="nextBtn" hidden>Próxima</button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="resultScreen" class="screen" hidden>
+    <div class="result-top">
+      <div class="medal" id="medal"><div><div class="big" id="finalScore">0</div><div class="of">de 100 pontos</div></div></div>
+      <div>
+        <span class="label" id="medalLabel">Resultado</span>
+        <h2 id="resultTitle">Plantão encerrado</h2>
+        <p id="resultMsg"></p>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="label">Acertos completos</span><div class="val v-ok" id="sHits">0/20</div></div>
+      <div class="stat"><span class="label">Moedas</span><div class="val v-coin" id="sCoins">0</div></div>
+      <div class="stat"><span class="label">Maior sequência</span><div class="val" id="sStreak">0</div></div>
+      <div class="stat"><span class="label">Tempo total</span><div class="val" id="sTime">00:00</div></div>
+    </div>
+    <h3 style="margin:24px 0 8px">Revisão das respostas</h3>
+    <div class="review" id="review"></div>
+    <div class="row" style="margin-top:20px">
+      <button class="btn" type="button" id="againBtn">Jogar novamente</button>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="overlay" id="pauseOverlay" hidden>
+  <div class="screen">
+    <h2>Quiz pausado</h2>
+    <p style="margin:0;color:var(--muted)">O cronômetro está parado. Continue quando estiver pronto.</p>
+    <button class="btn" type="button" id="resumeBtn">Continuar</button>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+/* ============ QUESTÕES ============
+   mc  = múltipla escolha (o: alternativas, a: índice correto)
+   dd  = arrastar e soltar
+     mode "cls"   → classificar itens em categorias (items: [texto, índice da categoria])
+     mode "match" → arrastar cada termo para a descrição certa (pairs: [termo, descrição])
+     mode "order" → colocar em ordem (items na ordem correta, labels das posições)
+*/
+const QUESTIONS = [
+ {type:"mc",t:"Confidencialidade",q:"Qual é o objetivo do pilar da confidencialidade?",o:["Proteger os dados contra acessos não autorizados","Deixar o sistema disponível 24 horas","Impedir que alguém negue uma ação","Fazer cópias de segurança dos dados"],a:0,e:"A confidencialidade garante que a informação só seja acessada por pessoas ou sistemas autorizados."},
+ {type:"mc",t:"Integridade",q:"O pilar da integridade garante que a informação:",o:["Seja vista por todos os funcionários","Não seja alterada ou corrompida de forma não autorizada","Fique sempre na nuvem","Seja apagada após o uso"],a:1,e:"Integridade: evitar alterações indevidas, acidentais ou maliciosas. Na enfermagem: uma dose não pode ser alterada indevidamente."},
+ {type:"mc",t:"Disponibilidade",q:"Qual é um exemplo de medida para garantir a disponibilidade?",o:["Usar biometria","Criptografar os dados","Backup regular e sistemas redundantes","Assinar o documento digitalmente"],a:2,e:"Backup, redundância e proteção contra ataques DoS e DDoS mantêm os sistemas acessíveis quando necessário."},
+ {type:"mc",t:"Irretratabilidade",q:"O que garante o pilar da irretratabilidade?",o:["Que a senha seja forte","Que o sistema nunca fique fora do ar","Que quem realizou uma ação não possa negá-la","Que ninguém acesse os dados"],a:2,e:"A irretratabilidade garante rastreabilidade: o registro de quem checou a medicação, por exemplo, não pode ser negado."},
+ {type:"mc",t:"LGPD",q:"Pela LGPD, os dados de saúde dos pacientes são considerados:",o:["Dados públicos","Dados pessoais sensíveis","Dados sem proteção","Dados financeiros"],a:1,e:"A Lei Geral de Proteção de Dados (Lei nº 13.709/2018) classifica os dados de saúde como dados pessoais sensíveis."},
+ {type:"mc",t:"Worms",q:"Qual é a principal diferença dos worms em relação aos outros vírus?",o:["Só atacam celulares","Precisam de um pen drive para funcionar","Espalham-se automaticamente para outros computadores pela rede","Apenas mudam a página inicial do navegador"],a:2,e:"Os worms se propagam sozinhos, pela internet ou pela rede local. Em um hospital, podem atingir vários setores ao mesmo tempo."},
+ {type:"mc",t:"Keyloggers",q:"Qual é a função de um keylogger?",o:["Bloquear o tráfego da rede","Capturar tudo o que o usuário digita, como senhas","Fazer backup automático","Acelerar o computador"],a:1,e:"O keylogger registra as teclas digitadas e é uma das formas usadas para roubar senhas."},
+ {type:"mc",t:"Curiosidade",q:"Os vírus podem danificar diretamente o hardware?",o:["Sim, sempre queimam as peças","Em geral não, mas há exceções como o CIH, que apagava a BIOS","Não, vírus só existem em celulares","Sim, mas só se o computador estiver desligado"],a:1,e:"Vírus atacam dados e software. O CIH (1998) foi uma exceção: apagava a BIOS e o computador deixava de ligar."},
+ {type:"mc",t:"Senhas Fortes",q:"Quantas combinações tem uma senha de 6 letras, só minúsculas (26⁶)?",o:["26","1.000","308.915.776","Mais de 10²¹"],a:2,e:"26⁶ = 308.915.776. Já uma senha de 12 caracteres misturados passa de 10²¹ combinações."},
+ {type:"mc",t:"Zero Trust",q:"Qual é a ideia central do modelo Zero Trust?",o:["Confiar em quem está dentro da rede","Nenhum usuário ou dispositivo é confiável automaticamente","Desligar o antivírus para ganhar velocidade","Usar a mesma senha em todos os sistemas"],a:1,e:"Zero Trust: nunca confie, sempre verifique. Tudo e todos são verificados antes de acessar os recursos."},
+
+ {type:"dd",mode:"match",t:"Pilares",q:"Arraste cada pilar até a sua definição.",
+  pairs:[["Confidencialidade","Só quem tem permissão acessa a informação"],["Integridade","A informação não é alterada indevidamente"],["Disponibilidade","A informação está acessível quando necessário"],["Autenticidade","Confirma que o usuário é quem diz ser"],["Irretratabilidade","Quem realizou a ação não pode negá-la"]],e:"Os cinco pilares orientam toda a proteção da informação."},
+ {type:"dd",mode:"match",t:"Tipos de Vírus",q:"Associe cada praga à sua descrição.",
+  pairs:[["Cavalo de Troia","Permite acesso remoto ao computador após a infecção"],["Worm","Espalha-se sozinho pela internet ou pela rede local"],["Keylogger","Captura tudo o que é digitado"],["Hijacker","Sequestra o navegador e muda a página inicial"]],e:"Cada praga age de um jeito, mas todas ameaçam os dados."},
+ {type:"dd",mode:"cls",t:"Boas Práticas",q:"Classifique cada atitude.",cats:["Boa prática","Prática arriscada"],
+  items:[["Usar senha forte",0],["Habilitar MFA",0],["Bloquear a tela (Windows + L)",0],["Clicar em link desconhecido",1],["Acessar o prontuário em Wi-Fi público",1],["Colar a senha no monitor",1]],e:"Senha forte, MFA e tela bloqueada protegem. Links suspeitos, Wi-Fi público e senha exposta abrem portas para ataques."},
+ {type:"dd",mode:"match",t:"Na Enfermagem",q:"Qual pilar aparece em cada situação do hospital?",
+  pairs:[["Confidencialidade","Só a equipe que cuida do paciente acessa o prontuário"],["Integridade","Uma dose prescrita não pode ser alterada indevidamente"],["Disponibilidade","O prontuário precisa funcionar 24 horas"],["Autenticidade","O profissional entra no sistema com biometria"]],e:"Os pilares estão presentes na rotina do posto de enfermagem."},
+ {type:"dd",mode:"cls",t:"Zero Trust",q:"Separe as ideias do modelo antigo e do Zero Trust.",cats:["Modelo antigo","Zero Trust"],
+  items:[["Confiar em quem está dentro da rede",0],["As ameaças estão só do lado de fora",0],["Verificar sempre a identidade",1],["Dar só o acesso necessário",1],["Monitorar o tempo todo",1]],e:"Antes: confie em quem está dentro. Agora: nunca confie, sempre verifique."},
+
+ {type:"ws",t:"Tipos de Vírus",q:"Encontre no caça-palavras os tipos de praga virtual.",
+  words:[["TROJAN","Nome em inglês do cavalo de Troia"],["WORM","Espalha-se sozinho pela rede"],["KEYLOGGER","Captura o que é digitado"],["HIJACKER","Sequestra o navegador"]],e:"Trojan, worm, keylogger e hijacker foram as pragas estudadas na aula."},
+ {type:"ws",t:"Proteção",q:"Encontre as ferramentas de proteção dos dados.",
+  words:[["ANTIVIRUS","Detecta e remove vírus"],["FIREWALL","Bloqueia tráfego indesejado na rede"],["BACKUP","Cópia de segurança dos dados"],["SENHA","Deve ser forte e não compartilhada"]],e:"Antivírus, firewall, backup e senha forte trabalham juntos na proteção."},
+ {type:"ws",t:"Autenticação",q:"Encontre as palavras ligadas à identificação do usuário.",
+  words:[["BIOMETRIA","Identificação pela digital ou pelo rosto"],["CERTIFICADO","Documento digital que autentica sites e documentos"],["LOGIN","Entrada no sistema com usuário e senha"],["MFA","Sigla da autenticação multifator"]],e:"Esses recursos garantem a autenticidade: o usuário é quem diz ser."},
+ {type:"ws",t:"Dados de Saúde",q:"Encontre as palavras ligadas à proteção dos dados do paciente.",
+  words:[["LGPD","Lei Geral de Proteção de Dados"],["SIGILO","Dever ético do profissional de enfermagem"],["PRONTUARIO","Registro das informações do paciente"],["SENSIVEL","Tipo de dado pessoal que inclui a saúde"]],e:"Dados de saúde são sensíveis pela LGPD e protegidos pelo sigilo profissional."},
+ {type:"ws",t:"Zero Trust",q:"Encontre as palavras do modelo Zero Trust.",
+  words:[["CONFIANCA","Zero Trust significa ___ Zero"],["VERIFICAR","Sempre ___ antes de liberar o acesso"],["MONITORAR","Acompanhar o comportamento o tempo todo"],["ACESSO","Deve ser mínimo, só o necessário"]],e:"Zero Trust: verificar sempre, dar acesso mínimo e monitorar o tempo todo."}
+];
+const PTS = 5, TIME = {mc:45, dd:90, ws:120}, LETTERS = "ABCD", TOTAL = QUESTIONS.length;
+const $ = id => document.getElementById(id);
+const nf = n => n.toLocaleString("pt-BR",{maximumFractionDigits:1});
+let st = null, timerId = null, paused = false, soundOn = true, actx = null;
+
+/* ---------- recorde ---------- */
+const KEY = "plantaoTI3_best";
+function loadBest(){ try{ return JSON.parse(localStorage.getItem(KEY)||"null"); }catch(e){ return null; } }
+function saveBest(b){ try{ localStorage.setItem(KEY,JSON.stringify(b)); }catch(e){} }
+function showBest(){ const b = loadBest(); $("bestScore").textContent = b ? `Seu recorde neste dispositivo: ${nf(b.score)} pontos e ${b.coins.toLocaleString("pt-BR")} moedas.` : ""; }
+showBest();
+
+/* ---------- som ---------- */
+function beep(freq,dur,type="sine",vol=.08,delay=0){
+  if(!soundOn) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain(), t=actx.currentTime+delay;
+    o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+dur);
+  }catch(e){}
+}
+const sfx = {
+  ok(){ beep(880,.12); beep(1320,.18,"sine",.08,.1); },
+  bad(){ beep(220,.25,"square",.05); beep(160,.3,"square",.05,.15); },
+  part(){ beep(660,.15,"triangle",.07); },
+  tick(){ beep(1000,.05,"sine",.04); },
+  drop(){ beep(520,.05,"triangle",.05); },
+  combo(){ [660,880,1100,1320].forEach((f,i)=>beep(f,.12,"triangle",.07,i*.08)); },
+  end(){ [523,659,784,1047].forEach((f,i)=>beep(f,.2,"triangle",.07,i*.12)); }
+};
+$("soundBtn").addEventListener("click",()=>{ soundOn=!soundOn; $("soundBtn").textContent = soundOn?"♪ Som: ligado":"♪ Som: desligado"; $("soundBtn").setAttribute("aria-pressed",soundOn); });
+
+/* ---------- utilidades ---------- */
+const shuffle = arr => { const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const mult = s => Math.min(2, 1 + Math.floor(s/2)*0.25);
+const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1800); }
+function show(id){ ["startScreen","gameScreen","resultScreen"].forEach(s=>$(s).hidden = s!==id); $("pauseBtn").hidden = id!=="gameScreen"; }
+const el = (tag, cls, text) => { const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; };
+
+/* ---------- preparar questões ---------- */
+function prepare(q){
+  if(q.type==="mc"){ const ord=shuffle([0,1,2,3]); return {...q,o:ord.map(i=>q.o[i]),a:ord.indexOf(q.a)}; }
+  if(q.type==="ws"){ const g=buildGrid(q.words.map(w=>w[0])); return {...q, ...g}; }
+  let zones, items;
+  if(q.mode==="cls"){ zones=q.cats.map((c,i)=>({id:i,label:c,multi:true})); items=q.items.map(([t,c],i)=>({id:i,text:t,zone:c})); }
+  else if(q.mode==="match"){ zones=q.pairs.map(([,d],i)=>({id:i,label:d})); items=q.pairs.map(([t],i)=>({id:i,text:t,zone:i})); zones=shuffle(zones); }
+  else { zones=q.labels.map((l,i)=>({id:i,label:l,num:i+1})); items=q.items.map((t,i)=>({id:i,text:t,zone:i})); }
+  return {...q, zones, items:shuffle(items)};
+}
+
+/* ---------- jogo ---------- */
+function start(name){
+  // embaralha mantendo as questões de arrastar distribuídas ao longo do jogo
+  // padrão: múltipla escolha, arrastar, múltipla escolha, caça-palavras (x5)
+  const mc=shuffle(QUESTIONS.filter(q=>q.type==="mc")), dd=shuffle(QUESTIONS.filter(q=>q.type==="dd")), ws=shuffle(QUESTIONS.filter(q=>q.type==="ws"));
+  const qs=[]; while(mc.length||dd.length||ws.length){ if(mc.length) qs.push(mc.pop()); if(dd.length) qs.push(dd.pop()); if(mc.length) qs.push(mc.pop()); if(ws.length) qs.push(ws.pop()); }
+  st={name, qs:qs.map(prepare), i:0, score:0, coins:0, streak:0, best:0, full:0, fifty:true, answers:[], left:0, elapsed:0, locked:false};
+  $("fiftyBtn").disabled=false;
+  show("gameScreen"); render();
+}
+function render(){
+  const q=st.qs[st.i];
+  st.left = TIME[q.type]; st.locked=false; st.place={}; st.sel=null;
+  $("hudQ").innerHTML=`${st.i+1}<small>/${TOTAL}</small>`;
+  $("progBar").style.width=`${(st.i/TOTAL)*100}%`;
+  $("qTopic").textContent=q.t;
+  $("qTopic").classList.toggle("tag-dd",q.type!=="mc");
+  $("qWorth").textContent = {mc:"Vale 5 pontos", dd:"Arrastar e soltar · 5 pontos", ws:"Caça-palavras · 5 pontos"}[q.type];
+  $("qText").textContent=q.q;
+  $("feedback").innerHTML="";
+  $("nextBtn").hidden=true;
+  $("checkBtn").hidden = q.type==="mc";
+  $("checkBtn").disabled = q.type==="dd";
+  $("checkBtn").textContent = q.type==="ws" ? "Concluir" : "Verificar";
+  $("fiftyBtn").hidden = q.type!=="mc";
+  const box=$("opts"); box.innerHTML="";
+  if(q.type==="mc") renderMC(q,box); else if(q.type==="dd") renderDD(q,box); else renderWS(q,box);
+  $("qCard").classList.remove("pop"); void $("qCard").offsetWidth; $("qCard").classList.add("pop");
+  updateTime(); startTimer();
+}
+function renderMC(q,box){
+  box.className="opts";
+  q.o.forEach((txt,k)=>{
+    const b=el("button","opt"); b.type="button"; b.id=`opt${k}`;
+    b.innerHTML=`<span class="key">${LETTERS[k]}</span><span></span>`; b.lastChild.textContent=txt;
+    b.addEventListener("click",()=>answerMC(k)); box.appendChild(b);
+  });
+}
+
+/* ---------- arrastar e soltar ---------- */
+function renderDD(q,box){
+  box.className="";
+  const hint=el("p","dd-hint"); hint.innerHTML="<span>✋</span><span>Arraste os cartões ou <b>toque no cartão e depois no destino</b>.</span>";
+  const pool=el("div","pool"); pool.id="pool"; pool.dataset.zone="pool";
+  q.items.forEach(it=>pool.appendChild(makeChip(it)));
+  const zones=el("div","zones"+(q.mode==="cls"?" cls":""));
+  q.zones.forEach(z=>{
+    const zone=el("div","zone"+(q.mode==="cls"?"":" row")); zone.dataset.zone=z.id;
+    if(q.mode==="cls"){ zone.appendChild(el("h4",null,z.label)); }
+    else { const d=el("div","desc"); if(z.num){ d.appendChild(el("span","num",z.num+"º")); } d.appendChild(document.createTextNode(z.label)); zone.appendChild(d); }
+    const slot=el("div","slot"); slot.dataset.zone=z.id; zone.appendChild(slot);
+    zones.appendChild(zone);
+    zone.addEventListener("click",e=>{ if(st.sel!=null && !e.target.closest(".chip-dd")) moveTo(st.sel,String(z.id)); });
+    zone.tabIndex=0;
+    zone.addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ") && st.sel!=null && e.target===zone){ e.preventDefault(); moveTo(st.sel,String(z.id)); } });
+  });
+  pool.addEventListener("click",e=>{ if(st.sel!=null && !e.target.closest(".chip-dd")) moveTo(st.sel,"pool"); });
+  box.append(hint,pool,zones);
+}
+function makeChip(it){
+  const c=el("div","chip-dd",it.text); c.dataset.id=it.id; c.tabIndex=0; c.setAttribute("role","button");
+  c.addEventListener("pointerdown",onDown);
+  c.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); select(it.id); } });
+  return c;
+}
+function chipEl(id){ return document.querySelector(`.chip-dd[data-id="${id}"]`); }
+function select(id){
+  if(st.locked) return;
+  document.querySelectorAll(".chip-dd.sel").forEach(c=>c.classList.remove("sel"));
+  document.querySelectorAll(".zone.target").forEach(z=>z.classList.remove("target"));
+  if(st.sel===id){ st.sel=null; return; }
+  st.sel=id; chipEl(id).classList.add("sel");
+}
+function moveTo(id,zoneId){
+  if(st.locked) return;
+  const q=st.qs[st.i], chip=chipEl(id);
+  chip.classList.remove("sel"); st.sel=null;
+  if(zoneId==="pool"){ $("pool").appendChild(chip); delete st.place[id]; }
+  else{
+    const z=q.zones.find(z=>String(z.id)===zoneId);
+    const slot=document.querySelector(`.slot[data-zone="${zoneId}"]`);
+    if(!z.multi){ // casa de um item só: devolve o antigo para a lista
+      [...slot.children].forEach(old=>{ if(old!==chip){ $("pool").appendChild(old); delete st.place[old.dataset.id]; } });
+    }
+    slot.appendChild(chip); st.place[id]=Number(zoneId);
+  }
+  sfx.drop();
+  $("checkBtn").disabled = Object.keys(st.place).length < q.items.length;
+}
+let drag=null;
+function onDown(e){
+  if(st.locked || e.button>0) return;
+  const chip=e.currentTarget;
+  drag={chip,id:chip.dataset.id,x:e.clientX,y:e.clientY,moved:false,ghost:null};
+  chip.setPointerCapture(e.pointerId);
+  chip.addEventListener("pointermove",onMove);
+  chip.addEventListener("pointerup",onUp,{once:true});
+  chip.addEventListener("pointercancel",onCancel,{once:true});
+}
+function zoneAt(x,y){
+  const t=document.elementFromPoint(x,y); if(!t) return null;
+  const z=t.closest("[data-zone]"); return z ? z.dataset.zone : null;
+}
+function onMove(e){
+  if(!drag) return;
+  if(!drag.moved && Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6) return;
+  if(!drag.moved){
+    drag.moved=true;
+    const g=drag.chip.cloneNode(true); g.classList.add("ghost"); g.classList.remove("sel"); document.body.appendChild(g); drag.ghost=g;
+    drag.chip.style.opacity=".35";
+  }
+  drag.ghost.style.left=e.clientX+"px"; drag.ghost.style.top=e.clientY+"px";
+  document.querySelectorAll(".zone.over,.pool.over").forEach(z=>z.classList.remove("over"));
+  const zid=zoneAt(e.clientX,e.clientY);
+  if(zid!=null){ const z = zid==="pool" ? $("pool") : document.querySelector(`.zone[data-zone="${zid}"]`); if(z) z.classList.add("over"); }
+}
+function endDrag(){
+  if(!drag) return;
+  drag.chip.removeEventListener("pointermove",onMove);
+  drag.chip.style.opacity="";
+  if(drag.ghost) drag.ghost.remove();
+  document.querySelectorAll(".zone.over,.pool.over").forEach(z=>z.classList.remove("over"));
+}
+function onUp(e){
+  if(!drag) return;
+  const d=drag; endDrag(); drag=null;
+  if(!d.moved){
+    // com um cartão já selecionado, tocar em um cartão que está numa casa envia o selecionado para aquela casa
+    const home=d.chip.parentElement.dataset.zone;
+    if(st.sel!=null && st.sel!==d.id && home!=="pool"){ moveTo(st.sel,home); return; }
+    select(d.id); return;
+  }
+  const zid=zoneAt(e.clientX,e.clientY);
+  if(zid!=null) moveTo(d.id,zid);
+}
+function onCancel(){ endDrag(); drag=null; }
+
+/* ---------- tempo ---------- */
+function startTimer(){
+  clearInterval(timerId);
+  timerId=setInterval(()=>{
+    if(paused||st.locked) return;
+    st.left--; st.elapsed++; updateTime();
+    if(st.left<=10&&st.left>0) sfx.tick();
+    if(st.left<=0){ const q=st.qs[st.i]; if(q.type==="mc") answerMC(-1); else if(q.type==="dd") checkDD(true); else checkWS(true); }
+  },1000);
+}
+function updateTime(){ $("timeVal").textContent=st.left; $("monitor").classList.toggle("low",st.left<=10); }
+function updHud(){
+  $("hudScore").innerHTML=`${nf(st.score)}<small>/100</small>`;
+  $("hudCoins").textContent=st.coins.toLocaleString("pt-BR");
+  $("hudStreak").innerHTML=`${st.streak} <small class="combo">${mult(st.streak).toFixed(1)}x</small>`;
+}
+
+/* ---------- pontuação ---------- */
+function award(frac){
+  // frac = fração de acerto (0 a 1)
+  const pts = Math.round(PTS*frac*10)/10;
+  st.score = Math.round((st.score+pts)*10)/10;
+  let gain=0;
+  if(frac===1){
+    st.streak++; st.best=Math.max(st.best,st.streak); st.full++;
+    gain=Math.round((100+Math.round((st.left/TIME[st.qs[st.i].type])*50))*mult(st.streak));
+    sfx.ok();
+    if(st.streak%5===0){ st.coins+=250; setTimeout(()=>{ sfx.combo(); toast(`Sequência de ${st.streak}! +250 moedas`); },250); }
+  } else {
+    st.streak=0;
+    if(frac>0){ gain=Math.round(100*frac); sfx.part(); } else sfx.bad();
+  }
+  st.coins+=gain; updHud();
+  return {pts,gain};
+}
+function showFeedback(kind,title,expl,gain,extraNode){
+  const f=el("div","feedback "+(kind==="ok"?"ok":"bad"));
+  f.appendChild(el("h3",null,title));
+  if(extraNode) f.appendChild(extraNode);
+  f.appendChild(el("p",null,expl));
+  if(gain) f.appendChild(el("span","gain",`+${gain} moedas`));
+  $("feedback").innerHTML=""; $("feedback").appendChild(f);
+  $("fiftyBtn").hidden=true; $("checkBtn").hidden=true;
+  $("nextBtn").hidden=false; $("nextBtn").textContent = st.i===TOTAL-1 ? "Ver resultado" : "Próxima";
+  $("nextBtn").focus({preventScroll:true});
+}
+function answerMC(k){
+  if(st.locked) return; st.locked=true;
+  const q=st.qs[st.i], ok=k===q.a, btns=[...$("opts").children];
+  btns.forEach(b=>b.disabled=true); btns[q.a].classList.add("correct");
+  if(!ok && k>=0) btns[k].classList.add("wrong");
+  const {gain}=award(ok?1:0);
+  st.answers.push({q:q.q,type:"mc",ok,frac:ok?1:0,chosen:k>=0?q.o[k]:null,right:q.o[q.a]});
+  showFeedback(ok?"ok":"bad", ok?"Resposta certa! +5 pontos":(k<0?"Tempo esgotado":"Resposta errada"), q.e, gain);
+}
+function checkDD(timeout=false){
+  if(st.locked) return; st.locked=true;
+  const q=st.qs[st.i];
+  document.querySelectorAll(".chip-dd").forEach(c=>{ c.classList.remove("sel"); c.classList.add("locked"); });
+  let hits=0;
+  const fixes=[];
+  q.items.forEach(it=>{
+    const c=chipEl(it.id), placed=st.place[it.id];
+    const ok = placed===it.zone; if(ok) hits++;
+    c.classList.add(ok?"ok":"bad");
+    if(!ok){
+      const z=q.zones.find(z=>z.id===it.zone);
+      fixes.push(`${it.text} → ${z.num?z.num+"º ("+z.label+")":z.label}`);
+      c.appendChild(el("span","correct-note",`✔ ${q.mode==="cls"?z.label:(z.num?z.num+"º":"veja a correção")}`));
+    }
+  });
+  const frac=hits/q.items.length;
+  const {pts,gain}=award(frac);
+  st.answers.push({q:q.q,type:"dd",ok:frac===1,frac,hits,total:q.items.length,fixes});
+  let title;
+  if(frac===1) title="Tudo certo! +5 pontos";
+  else if(timeout && hits===0) title="Tempo esgotado";
+  else title=`${hits} de ${q.items.length} certos · +${nf(pts)} pontos`;
+  let extra=null;
+  if(fixes.length){ extra=el("p"); extra.innerHTML="<strong>Correção:</strong> "; extra.appendChild(document.createTextNode(fixes.join(" · "))); }
+  showFeedback(frac===1?"ok":"bad", title, q.e, gain, extra);
+}
+$("checkBtn").addEventListener("click",()=>{ if(st.qs[st.i].type==="ws") checkWS(false); else checkDD(false); });
+/* ---------- caça-palavras ---------- */
+const WS_DIRS = [[0,1],[1,0],[1,1]]; // direita, para baixo, diagonal
+const WS_ABC = "ABCDEFGHIJLMNOPRSTUVZ";
+function buildGrid(words){
+  const longest = Math.max(...words.map(w=>w.length));
+  const n = Math.max(10, longest);
+  for(let attempt=0; attempt<200; attempt++){
+    const g = Array.from({length:n},()=>Array(n).fill(null));
+    const placed = [];
+    let ok = true;
+    for(const w of [...words].sort((a,b)=>b.length-a.length)){
+      let done = false;
+      for(let t=0; t<300 && !done; t++){
+        const [dr,dc] = WS_DIRS[Math.floor(Math.random()*WS_DIRS.length)];
+        const r0 = Math.floor(Math.random()*(n - dr*(w.length-1)));
+        const c0 = Math.floor(Math.random()*(n - dc*(w.length-1)));
+        let fits = true;
+        for(let k=0;k<w.length;k++){ const ch=g[r0+dr*k][c0+dc*k]; if(ch && ch!==w[k]){ fits=false; break; } }
+        if(!fits) continue;
+        const cells=[];
+        for(let k=0;k<w.length;k++){ g[r0+dr*k][c0+dc*k]=w[k]; cells.push([r0+dr*k,c0+dc*k]); }
+        placed.push({word:w,cells}); done = true;
+      }
+      if(!done){ ok=false; break; }
+    }
+    if(!ok) continue;
+    for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(!g[r][c]) g[r][c]=WS_ABC[Math.floor(Math.random()*WS_ABC.length)];
+    return {n, grid:g, placed};
+  }
+  throw new Error("Não foi possível montar o caça-palavras");
+}
+const WS_COLORS = ["#3fd6c8","#ffbe4d","#b48cff","#ff8fa3","#5ee08f"];
+function renderWS(q,box){
+  box.className="";
+  st.ws = {found:new Set(), start:null, dragging:false};
+  const hint=el("p","dd-hint"); hint.innerHTML="<span>🔎</span><span>Arraste sobre as letras ou <b>toque na primeira e na última letra</b> da palavra.</span>";
+  const wrapEl=el("div","ws-wrap");
+  const grid=el("div","ws-grid"); grid.style.setProperty("--n",q.n); grid.id="wsGrid";
+  q.grid.forEach((row,r)=>row.forEach((ch,c)=>{ const d=el("div","ws-cell",ch); d.dataset.r=r; d.dataset.c=c; grid.appendChild(d); }));
+  const list=el("ol","ws-list"); list.id="wsList";
+  q.words.forEach(([w,clue],i)=>{
+    const li=el("li","ws-clue"); li.dataset.i=i;
+    li.appendChild(el("span","ws-c",clue));
+    li.appendChild(el("span","ws-blank",w[0]+" "+"_ ".repeat(w.length-1).trim()+` (${w.length})`));
+    list.appendChild(li);
+  });
+  const count=el("p","ws-count"); count.id="wsCount"; count.textContent=`Encontradas: 0 de ${q.words.length}`;
+  wrapEl.append(grid,list);
+  box.append(hint,wrapEl,count);
+  grid.addEventListener("pointerdown",wsDown);
+  grid.addEventListener("pointermove",wsMove);
+  grid.addEventListener("pointerup",wsUp);
+  grid.addEventListener("pointercancel",()=>{ st.ws.dragging=false; wsClear(); });
+}
+function cellAt(x,y){ const t=document.elementFromPoint(x,y); return t && t.classList.contains("ws-cell") ? t : null; }
+function wsLine(a,b){
+  const r1=+a.dataset.r,c1=+a.dataset.c,r2=+b.dataset.r,c2=+b.dataset.c;
+  const dr=Math.sign(r2-r1), dc=Math.sign(c2-c1), len=Math.max(Math.abs(r2-r1),Math.abs(c2-c1));
+  if(!(r1===r2 || c1===c2 || Math.abs(r2-r1)===Math.abs(c2-c1))) return null;
+  const out=[]; for(let k=0;k<=len;k++) out.push([r1+dr*k,c1+dc*k]); return out;
+}
+function wsCell(r,c){ return document.querySelector(`.ws-cell[data-r="${r}"][data-c="${c}"]`); }
+function wsClear(){ document.querySelectorAll(".ws-cell.sel,.ws-cell.start").forEach(c=>c.classList.remove("sel","start")); }
+function wsPaint(line){ document.querySelectorAll(".ws-cell.sel").forEach(c=>c.classList.remove("sel")); if(line) line.forEach(([r,c])=>wsCell(r,c).classList.add("sel")); }
+function wsDown(e){
+  if(st.locked) return;
+  const cell=cellAt(e.clientX,e.clientY); if(!cell) return;
+  e.preventDefault();
+  if(st.ws.start && st.ws.start!==cell && !st.ws.dragging){ // modo toque: segundo toque
+    const line=wsLine(st.ws.start,cell); wsClear(); st.ws.start=null; wsTry(line); return;
+  }
+  st.ws.start=cell; st.ws.dragging=true; st.ws.moved=false;
+  wsClear(); cell.classList.add("start","sel");
+}
+function wsMove(e){
+  if(!st.ws || !st.ws.dragging || st.locked) return;
+  const cell=cellAt(e.clientX,e.clientY); if(!cell) return;
+  if(cell!==st.ws.start) st.ws.moved=true;
+  wsPaint(wsLine(st.ws.start,cell)); st.ws.start.classList.add("start");
+}
+function wsUp(e){
+  if(!st.ws || !st.ws.dragging) return;
+  st.ws.dragging=false;
+  const cell=cellAt(e.clientX,e.clientY);
+  if(!st.ws.moved || !cell || cell===st.ws.start){ return; } // fica marcada como início (modo toque)
+  const line=wsLine(st.ws.start,cell); wsClear(); st.ws.start=null; wsTry(line);
+}
+function wsTry(line){
+  if(!line) return;
+  const q=st.qs[st.i];
+  const s=line.map(([r,c])=>q.grid[r][c]).join(""), rev=[...s].reverse().join("");
+  const hit=q.words.find(([w])=>!st.ws.found.has(w) && (w===s || w===rev));
+  if(!hit){ sfx.bad(); line.forEach(([r,c])=>{ const d=wsCell(r,c); d.classList.add("miss"); setTimeout(()=>d.classList.remove("miss"),350); }); return; }
+  const w=hit[0], idx=st.ws.found.size;
+  st.ws.found.add(w);
+  line.forEach(([r,c])=>{ const d=wsCell(r,c); d.classList.add("found"); d.style.setProperty("--hc",WS_COLORS[idx%WS_COLORS.length]); });
+  const li=document.querySelector(`.ws-clue[data-i="${q.words.findIndex(x=>x[0]===w)}"]`); li.classList.add("done"); li.querySelector(".ws-blank").textContent=w;
+  li.style.setProperty("--hc",WS_COLORS[idx%WS_COLORS.length]);
+  $("wsCount").textContent=`Encontradas: ${st.ws.found.size} de ${q.words.length}`;
+  sfx.ok();
+  if(st.ws.found.size===q.words.length) setTimeout(()=>checkWS(false),500);
+}
+function checkWS(timeout=false){
+  if(st.locked) return; st.locked=true;
+  const q=st.qs[st.i];
+  const missing=q.words.map(w=>w[0]).filter(w=>!st.ws.found.has(w));
+  missing.forEach(w=>{ const p=q.placed.find(p=>p.word===w); p.cells.forEach(([r,c])=>wsCell(r,c).classList.add("reveal"));
+    const li=document.querySelector(`.ws-clue[data-i="${q.words.findIndex(x=>x[0]===w)}"]`); li.classList.add("missed"); li.querySelector(".ws-blank").textContent=w; });
+  wsClear();
+  const hits=q.words.length-missing.length, frac=hits/q.words.length;
+  const {pts,gain}=award(frac);
+  st.answers.push({q:q.q,type:"ws",ok:frac===1,frac,hits,total:q.words.length,fixes:missing.length?["Faltou encontrar: "+missing.join(", ")]:[]});
+  let title = frac===1 ? "Todas encontradas! +5 pontos" : (timeout && hits===0 ? "Tempo esgotado" : `${hits} de ${q.words.length} palavras · +${nf(pts)} pontos`);
+  let extra=null;
+  if(missing.length){ extra=el("p"); extra.innerHTML="<strong>Faltou:</strong> "; extra.appendChild(document.createTextNode(missing.join(", ")+" (destacadas na grade)")); }
+  showFeedback(frac===1?"ok":"bad",title,q.e,gain,extra);
+}
+
+$("nextBtn").addEventListener("click",()=>{ st.i++; if(st.i>=TOTAL) finish(); else render(); });
+$("fiftyBtn").addEventListener("click",()=>{
+  const q=st.qs[st.i];
+  if(!st.fifty||st.locked||q.type!=="mc") return;
+  st.fifty=false; $("fiftyBtn").disabled=true;
+  shuffle([0,1,2,3].filter(i=>i!==q.a)).slice(0,2).forEach(i=>{ const b=$(`opt${i}`); b.disabled=true; b.classList.add("cut"); });
+  toast("Duas alternativas erradas eliminadas");
+});
+
+/* ---------- resultado ---------- */
+function finish(){
+  clearInterval(timerId); $("progBar").style.width="100%";
+  const s=st.score; let medal,color,title,msg;
+  if(s>=90){ medal="Medalha de ouro"; color="var(--coin)"; title="Plantão impecável!"; msg="você chegou à classe OURO. Seus dados (e os dos pacientes) estão em boas mãos."; }
+  else if(s>=70){ medal="Medalha de prata"; color="#c9d6e2"; title="Muito bom!"; msg="falta pouco para o ouro. Revise as questões que errou e jogue de novo."; }
+  else if(s>=50){ medal="Medalha de bronze"; color="#d99a62"; title="Bom começo"; msg="reveja os slides da aula e tente chegar ao ouro."; }
+  else { medal="Continue praticando"; color="var(--bad)"; title="Hora de revisar"; msg="releia o material da aula, principalmente os temas em que errou, e jogue de novo."; }
+  $("medal").style.setProperty("--medal",color);
+  $("finalScore").textContent=nf(s);
+  $("medalLabel").textContent=medal; $("resultTitle").textContent=title;
+  $("resultMsg").textContent=`${st.name}, ${msg}`;
+  $("sHits").textContent=`${st.full}/${TOTAL}`;
+  $("sCoins").textContent=st.coins.toLocaleString("pt-BR");
+  $("sStreak").textContent=st.best; $("sTime").textContent=fmt(st.elapsed);
+  const rv=$("review"); rv.innerHTML="";
+  st.answers.forEach((a,n)=>{
+    const d=el("details"); if(!a.ok) d.className="x";
+    const sm=el("summary"); sm.appendChild(el("b",null,String(n+1).padStart(2,"0")));
+    sm.appendChild(el("span",null,(a.ok?"✔ ":"✘ ")+({dd:"[Arrastar] ",ws:"[Caça-palavras] "}[a.type]||"")+a.q)); d.appendChild(sm);
+    const p=el("p","ans");
+    if(a.type==="mc"){
+      p.innerHTML="Sua resposta: <strong></strong><br>Resposta correta: <strong></strong>";
+      const ss=p.querySelectorAll("strong"); ss[0].textContent=a.chosen??"Sem resposta (tempo esgotado)"; ss[1].textContent=a.right;
+    } else {
+      p.textContent=`Você acertou ${a.hits} de ${a.total} itens (${nf(PTS*a.frac)} de 5 pontos).`;
+      if(a.fixes.length){ p.appendChild(document.createElement("br")); const s2=el("strong",null,"Correção: "); p.appendChild(s2); p.appendChild(document.createTextNode(a.fixes.join(" · "))); }
+    }
+    d.appendChild(p); rv.appendChild(d);
+  });
+  const b=loadBest();
+  if(!b||s>b.score||(s===b.score&&st.coins>b.coins)) saveBest({score:s,coins:st.coins});
+  show("resultScreen"); sfx.end(); showBest(); window.scrollTo({top:0,behavior:"smooth"});
+}
+$("startForm").addEventListener("submit",e=>{ e.preventDefault(); const n=$("playerName").value.trim(); if(!n){ $("playerName").focus(); return; } start(n); });
+$("againBtn").addEventListener("click",()=>{ show("startScreen"); $("playerName").focus(); });
+$("pauseBtn").addEventListener("click",()=>{ paused=true; $("pauseOverlay").hidden=false; $("resumeBtn").focus(); });
+$("resumeBtn").addEventListener("click",()=>{ paused=false; $("pauseOverlay").hidden=true; });
+
+/* ---------- traçado de ECG ---------- */
+const cv=$("ecg"), cx=cv.getContext("2d");
+let x=0,phase=0,lastY=null;
+function size(){ const r=cv.getBoundingClientRect(), d=window.devicePixelRatio||1; cv.width=r.width*d; cv.height=r.height*d; cx.setTransform(d,0,0,d,0,0); x=0; lastY=null; }
+window.addEventListener("resize",size);
+function ecgY(p){ if(p<.10) return Math.sin(p/.10*Math.PI)*.12; if(p<.16) return 0; if(p<.18) return -.15; if(p<.21) return 1; if(p<.24) return -.35; if(p<.40) return 0; if(p<.52) return Math.sin((p-.40)/.12*Math.PI)*.22; return 0; }
+function draw(){
+  requestAnimationFrame(draw);
+  if($("gameScreen").hidden||paused) return;
+  const w=cv.width/(window.devicePixelRatio||1), h=cv.height/(window.devicePixelRatio||1); if(!w) return;
+  const low=st&&st.left<=10, speed=low?2.4:1.6, rate=low?.022:.013, css=getComputedStyle(document.documentElement);
+  for(let s=0;s<2;s++){
+    cx.fillStyle=css.getPropertyValue("--panel"); cx.fillRect(x,0,14,h);
+    phase=(phase+rate)%1; const y=h*.72-ecgY(phase)*h*.4;
+    cx.strokeStyle=low?css.getPropertyValue("--bad"):css.getPropertyValue("--ecg"); cx.lineWidth=2; cx.lineJoin="round";
+    if(lastY!==null){ cx.beginPath(); cx.moveTo(x-speed/2,lastY); cx.lineTo(x,y); cx.stroke(); }
+    lastY=y; x+=speed/2; if(x>w){ x=0; lastY=null; }
+  }
+}
+new ResizeObserver(size).observe(cv); draw();
+})();
+</script>
+</body>
+</html>
